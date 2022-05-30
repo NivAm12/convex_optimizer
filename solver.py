@@ -32,6 +32,7 @@ def GD_solver(H: np.ndarray, y: np.ndarray):
     epsilon = 1 / 1000000000
     first = True
     min_gamma = 1e-11
+    gamma_threshold = 1e-30
 
     fun = lambda x: t * np.linalg.norm(H @ x - y)**2 - np.sum(np.log(x + epsilon))
 
@@ -44,26 +45,31 @@ def GD_solver(H: np.ndarray, y: np.ndarray):
         # cur_x /= np.sum(cur_x)
 
         #  check if we get out of the barrier:
+
         step_update_required = np.any(sanity_x < 0)
-        while step_update_required:
-            gamma *= 0.1
-            if gamma <= min_gamma:
-                gamma = min_gamma
-                # print(i)
-                sanity_x = np.maximum(sanity_x, 0)
-                break
+        if step_update_required:
+            grad_max = np.max(grad)
+            if grad_max != 0:
+                i_max = np.argmax(grad)
+                gamma_max = prev_x[i_max] / grad_max
+                print(i)
+                print(gamma_max)
+                if gamma_max >= gamma_threshold:
+                    gamma = gamma_max / 2
+                else:
+                    print('over threshold')
 
-            sanity_x = cur_x - gamma * grad
-            step_update_required = np.any(sanity_x < 0)
-        
-        cur_x =  sanity_x 
+        # while step_update_required:
+        #     gamma *= 0.1
+        #     if gamma <= min_gamma:
+        #         gamma = min_gamma
+        #         sanity_x = np.maximum(sanity_x, 0)
+        #         break
+
+        #     sanity_x = cur_x - gamma * grad
+        #     step_update_required = np.any(sanity_x < 0)
+        cur_x -= gamma * grad
         cur_x /= np.sum(cur_x)
-
-        flag = np.any(cur_x < 0)
-        if flag and first:
-            # print(cur_x)
-            # print(i)
-            first = False
 
         if (precision >= fun(cur_x)):
             break  
@@ -144,7 +150,7 @@ file = open('./examples/examples.pkl', 'rb')
 examples = pickle.load(file)
 
 
-for i, example in enumerate(examples, 0):
+for i, example in enumerate(examples[:1], 0):
     H = example.H
     y = example.y
 
