@@ -25,6 +25,7 @@ def GD_solver(H: np.ndarray, y: np.ndarray):
         return "error"
 
     cur_x = np.ones(H.shape[1]) / H.shape[1] 
+    print(cur_x)
     gamma = 0.001
     precision = 0.001
     t = 100
@@ -36,7 +37,7 @@ def GD_solver(H: np.ndarray, y: np.ndarray):
         grad = t * (H.T @ ((H @ prev_x) - y)) - (np.sum(np.vectorize(barrier_grad_func)(prev_x)))
         cur_x -= 2 * gamma * grad
         cur_x /= np.sum(cur_x)
-
+        print(np.log(cur_x))
         if (precision >= fun(cur_x)):
             break  
 
@@ -112,11 +113,11 @@ class Example:
         self.H = H
         self.y = y
 
-file = open('../examples.pkl', 'rb')
+file = open('./examples/examples.pkl', 'rb')
 examples = pickle.load(file)
 
 
-for i, example in enumerate(examples, 0):
+for i, example in enumerate(examples[:1], 0):
     H = example.H
     y = example.y
 
