@@ -25,19 +25,34 @@ def GD_solver(H: np.ndarray, y: np.ndarray):
         return "error"
 
     cur_x = np.ones(H.shape[1]) / H.shape[1] 
-    print(cur_x)
+    sanity_x = cur_x
     gamma = 0.001
+    min_gamma = 0.000000001
     precision = 0.001
     t = 100
-    fun = lambda x: t * np.linalg.norm(H @ x - y)**2 - np.sum(np.log(x))
-    barrier_grad_func = lambda xi : 1 / xi  
+    epsilon = 1 / 1000000000
+
+    fun = lambda x: t * np.linalg.norm(H @ x - y)**2 - np.sum(np.log(x + epsilon))
 
     for i in range(1000):
         prev_x = cur_x
-        grad = t * (H.T @ ((H @ prev_x) - y)) - (np.sum(np.vectorize(barrier_grad_func)(prev_x)))
-        cur_x -= 2 * gamma * grad
+        grad = 2 * t * (H.T @ ((H @ prev_x) - y)) - (np.sum(-1 / (prev_x + epsilon)))
+        sanity_x = cur_x - gamma * grad
+
+        #  check if we get out of the barrier:
+        step_update_required = np.any(sanity_x < 0)
+        while step_update_required:
+            gamma *= 0.1
+            if gamma <= min_gamma:
+                sanity_x = np.maximum(sanity_x, 0)
+                break
+
+            sanity_x = cur_x - gamma * grad
+            step_update_required = np.any(sanity_x < 0)
+        
+        cur_x =  sanity_x 
         cur_x /= np.sum(cur_x)
-        print(np.log(cur_x))
+
         if (precision >= fun(cur_x)):
             break  
 
