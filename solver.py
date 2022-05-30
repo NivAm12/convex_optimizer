@@ -25,25 +25,31 @@ def GD_solver(H: np.ndarray, y: np.ndarray):
         return "error"
 
     cur_x = np.ones(H.shape[1]) / H.shape[1] 
-    sanity_x = cur_x
+    # sanity_x = cur_x
     gamma = 0.001
-    min_gamma = 0.000000001
     precision = 0.001
-    t = 100
+    t = 1000
     epsilon = 1 / 1000000000
+    first = True
+    min_gamma = 1e-11
 
     fun = lambda x: t * np.linalg.norm(H @ x - y)**2 - np.sum(np.log(x + epsilon))
 
     for i in range(1000):
         prev_x = cur_x
-        grad = 2 * t * (H.T @ ((H @ prev_x) - y)) - (np.sum(-1 / (prev_x + epsilon)))
+        grad = 2 * t * (H.T @ ((H @ prev_x) - y)) - (1 / (prev_x + epsilon))
+        
         sanity_x = cur_x - gamma * grad
+        # cur_x-= gamma * grad
+        # cur_x /= np.sum(cur_x)
 
         #  check if we get out of the barrier:
         step_update_required = np.any(sanity_x < 0)
         while step_update_required:
             gamma *= 0.1
             if gamma <= min_gamma:
+                gamma = min_gamma
+                # print(i)
                 sanity_x = np.maximum(sanity_x, 0)
                 break
 
@@ -53,10 +59,15 @@ def GD_solver(H: np.ndarray, y: np.ndarray):
         cur_x =  sanity_x 
         cur_x /= np.sum(cur_x)
 
+        flag = np.any(cur_x < 0)
+        if flag and first:
+            # print(cur_x)
+            # print(i)
+            first = False
+
         if (precision >= fun(cur_x)):
             break  
 
-    sum1 = np.sum(cur_x)
     return cur_x
 
 def NW_solver(H: np.ndarray, y: np.ndarray):
@@ -98,9 +109,11 @@ def NW_solver_v2(H: np.ndarray, y: np.ndarray):
         return "error"
 
     results = [1000000000000]
-
+    epsilon = 1 / 1000000000
     precision = 0.01
-    fun = lambda x: np.linalg.norm(H @ x - y)**2
+    t = 1000
+
+    fun = lambda x: t * np.linalg.norm(H @ x - y)**2 - np.sum(np.log(x + epsilon))
 
     # use the gradient descent as the initial 
     cur_x = GD_solver(H, y)
@@ -108,11 +121,10 @@ def NW_solver_v2(H: np.ndarray, y: np.ndarray):
 
     for i in range(6):
         prev_x = cur_x
-        grad = (H.T @ ((H @ prev_x) - y))
+        grad = 2 * t * (H.T @ ((H @ prev_x) - y)) - (1 / (prev_x + epsilon))
         cur_x -=  np.linalg.solve(hessian, grad)
 
         # constrains
-        cur_x = np.maximum(cur_x, 0)
         cur_x /= np.sum(cur_x)
         results.append(fun(cur_x))
        
@@ -132,7 +144,7 @@ file = open('./examples/examples.pkl', 'rb')
 examples = pickle.load(file)
 
 
-for i, example in enumerate(examples[:1], 0):
+for i, example in enumerate(examples, 0):
     H = example.H
     y = example.y
 
@@ -155,3 +167,18 @@ for i, example in enumerate(examples[:1], 0):
     print('NW validation:', np.isclose(np.sum(nw_x), 1.))
     
     print('\n\n')
+
+
+    #  check if we get out of the barrier:
+        # step_update_required = np.any(sanity_x < 0)
+        # while step_update_required:
+        #     gamma *= 0.1
+        #     if gamma <= min_gamma:
+        #         sanity_x = np.maximum(sanity_x, 0)
+        #         break
+
+        #     sanity_x = cur_x - gamma * grad
+        #     step_update_required = np.any(sanity_x < 0)
+        
+        # cur_x =  sanity_x 
+        # cur_x /= np.sum(cur_x)
