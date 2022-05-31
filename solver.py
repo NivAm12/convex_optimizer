@@ -3,6 +3,7 @@ import numpy as np
 import io
 import pickle
 import time
+from tqdm import tqdm
 import matplotlib.pyplot as plt
 import datetime
 
@@ -144,16 +145,20 @@ def dual_solver(H: np.ndarray, y: np.ndarray):
     max_gamma_threshold = 1e-3
     gamma = max_gamma_threshold
     gamma_step_counter = 0
+    m2_norms = []
+    grad_m2_norms = []
+    m1_values = []
+    fun_values = []
 
-    # def fun(mu1, mu2):
-    #     return 3/4 * np.linalg.norm(mu2) - mu1 - mu2 @ y
+    def fun(mu1, mu2):
+        return 3/4 * np.sum(mu2**2) - mu1 - mu2 @ y
 
     def step_update_required(mu1, mu2):
         res = mu1 * np.ones(H.shape[1]) + H.T @ mu2
         return np.any(res < 0)
 
-    for i in range(1000):
-        prev_mu1 = cur_mu1
+    print(f'start of for loop {datetime.datetime.now()}')
+    for i in tqdm(range(1000), desc="Dual for loop"):
         prev_mu2 = cur_mu2
         grad_mu1 = -1
         grad_mu2 = 3/2 * prev_mu2 - y
@@ -178,10 +183,19 @@ def dual_solver(H: np.ndarray, y: np.ndarray):
         cur_mu1 = sanity_mu1
         cur_mu2 = sanity_mu2
 
+        m2_norms.append(np.sum(cur_mu2**2))
+        grad_m2_norms.append(np.sum(grad_mu2**2))
+        m1_values.append(cur_mu1)
+        fun_values.append(fun(cur_mu1, cur_mu2))
+        # plot norms
         gamma_step_counter += 1
 
+    # plot_norms(range(1000), m2_norms, grad_m2_norms, m1_values, fun_values)
+
+    print(f'end of for loop {datetime.datetime.now()}')
     z = y - 1/2 * cur_mu2
-    x = np.linalg.lstsq(H, z, rcond=-1)[0]
+    x = np.linalg.solve(H.T @ H, H.T @ z)
+    print(f'end of solve {datetime.datetime.now()}')
 
     if np.any(x < 0):
         x = np.maximum(0, x)
@@ -189,6 +203,20 @@ def dual_solver(H: np.ndarray, y: np.ndarray):
         x /= np.sum(x)
 
     return x
+
+def plot_norms(x_axis, m2_norms, grad_m2_norms, m1_values, fun_values):
+    plt.title('m2_norms')
+    plt.plot(x_axis, m2_norms, label='m2_norms')
+    plt.show()
+    plt.title('grad_m2_norms')
+    plt.plot(x_axis, grad_m2_norms, label='grad_m2_norms')
+    plt.show()
+    plt.title('m1_values')
+    plt.plot(x_axis, m1_values, label='m1_values')
+    plt.show()
+    plt.title('fun_values')
+    plt.plot(x_axis, fun_values, label='fun_values')
+    plt.show()
 
 class Example:
     def __init__(self, H: np.ndarray, y: np.ndarray, x: np.ndarray):
@@ -200,39 +228,34 @@ class Example:
 file = open('./examples/examples.pkl', 'rb')
 examples = pickle.load(file)
 
-
+print(f'~~~~ Start of run {datetime.datetime.now()} ~~~~')
 for i, example in enumerate(examples, 0):
     H = example.H
     y = example.y
 
     # skip big examples for debugging manners
-    if H.shape[0] > 1000:
-        continue
+    # if H.shape[0] > 1000:
+    #     continue
 
     # Mor debuging!!!!
-    # if i is not 10:
+    # if i is not 8:
     #     continue
 
     print(f'--- example {i} ---')
     print(H.shape)
     print(y.shape)
-    print('GD start')
-    now = datetime.datetime.now()
-    gd_x = GD_solver(H, y)
-    print('GD end')
-    print('Dual start')
+    # gd_x = GD_solver(H, y)
     dual_x = dual_solver(H, y)
-    print('Dual end')
     # nw_x = NW_solver_v2(H, y)
-    try:
-        x_approx = solve(H, y)
-        print('solver score:', np.linalg.norm(y - H @ x_approx))
-        print('solver validation:', np.isclose(np.sum(x_approx), 1.) and not np.any(x_approx < 0))
-    except:
-        pass
+    # try:
+    #     x_approx = solve(H, y)
+    #     print('solver score:', np.linalg.norm(y - H @ x_approx))
+    #     print('solver validation:', np.isclose(np.sum(x_approx), 1.) and not np.any(x_approx < 0))
+    # except:
+    #     pass
 
-    print('GD score:', np.linalg.norm(y - H @ gd_x))
-    print('GD validation:', np.isclose(np.sum(gd_x), 1.) and not np.any(gd_x < 0))
+    # print('GD score:', np.linalg.norm(y - H @ gd_x))
+    # print('GD validation:', np.isclose(np.sum(gd_x), 1.) and not np.any(gd_x < 0))
 
     print('Dual score:', np.linalg.norm(y - H @ dual_x))
     print('Dual validation:', np.isclose(np.sum(dual_x), 1.) and not np.any(dual_x < 0))
@@ -241,6 +264,7 @@ for i, example in enumerate(examples, 0):
     # print('NW validation:', np.isclose(np.sum(nw_x), 1.) and not np.any(nw_x < 0))
     print('\n\n')
 
+print(f'~~~~ End of run {datetime.datetime.now()} ~~~~')
 #  check if we get out of the barrier:
 # step_update_required = np.any(sanity_x < 0)
 # while step_update_required:
