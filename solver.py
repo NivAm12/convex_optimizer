@@ -73,7 +73,7 @@ def NW_solver_v2(H: np.ndarray, y: np.ndarray):
     results = [1000000000000]
     gamma = 0.001
     precision = 0.001
-    t = 1000
+    t = 10000
     epsilon = 1e-8
     gamma_threshold = 1e-30
     gamma_step_counter = 0
@@ -89,7 +89,6 @@ def NW_solver_v2(H: np.ndarray, y: np.ndarray):
         grad = 2 * t * (H.T @ ((H @ prev_x) - y)) - (1 / (prev_x + epsilon))
         grad_diag_v = np.diag((- 1 / (prev_x + epsilon)**2))
         hessian = norm_hessian + grad_diag_v
-        # cur_x -= np.linalg.solve(hessian, grad)
 
         #  check if we get out of the barrier:
         sanity_x = cur_x - np.linalg.solve(hessian, grad)
@@ -104,7 +103,7 @@ def NW_solver_v2(H: np.ndarray, y: np.ndarray):
         if step_update_required:
             sanity_x = np.maximum(0, sanity_x)
 
-
+        # update x
         cur_x = sanity_x
         cur_x /= np.sum(cur_x)
 
@@ -113,7 +112,7 @@ def NW_solver_v2(H: np.ndarray, y: np.ndarray):
 
         if (precision >= results[i + 1] or abs((results[i + 1] - results[i])) < 0.5):
             break
-
+    
     return cur_x
 
 
@@ -128,7 +127,7 @@ def NW_solver(H: np.ndarray, y: np.ndarray):
     fun = lambda x: t * np.linalg.norm(H @ x - y) ** 2 - np.sum(np.log(x))
     barrier_grad_func = lambda xi: 1 / xi
 
-    # use the gradient descent as the initial 
+    # use the gradient descent as the initial x
     cur_x = GD_solver(H, y)
     hessian = 2 * np.dot(H.T, H)
 
@@ -179,10 +178,10 @@ for i, example in enumerate(examples, 0):
         pass
 
     print('GD score:', np.linalg.norm(y - H @ gd_x))
-    print('GD validation:', np.isclose(np.sum(gd_x), 1.))
+    print('GD validation:', np.isclose(np.sum(gd_x), 1.) and not np.any(gd_x < 0))
 
 
     print('NW score:', np.linalg.norm(y - H @ nw_x))
-    print('NW validation:', np.isclose(np.sum(nw_x), 1.))
+    print('NW validation:', np.isclose(np.sum(nw_x), 1.) and not np.any(nw_x < 0))
 
     print('\n\n')
