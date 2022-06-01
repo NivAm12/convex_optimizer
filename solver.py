@@ -135,19 +135,17 @@ def NW_solver_v2(H: np.ndarray, y: np.ndarray):
 
     return cur_x
 
-def dual_solver(H: np.ndarray, y: np.ndarray):
-    if H.shape[0] != y.shape[0]:
-        return "error"
 
+def dual_solver(H: np.ndarray, y: np.ndarray):
     cur_mu1 = 1
     cur_mu2 = np.zeros(y.shape[0])
     min_gamma_threshold = 1e-30
     max_gamma_threshold = 1e-3
     gamma = max_gamma_threshold
     gamma_step_counter = 0
-    m2_norms = []
-    grad_m2_norms = []
-    m1_values = []
+    mu2_norms = []
+    grad_mu2_norms = []
+    mu1_values = []
     fun_values = []
 
     def fun(mu1, mu2):
@@ -157,8 +155,8 @@ def dual_solver(H: np.ndarray, y: np.ndarray):
         res = mu1 * np.ones(H.shape[1]) + H.T @ mu2
         return np.any(res < 0)
 
-    print(f'start of for loop {datetime.datetime.now()}')
-    for i in tqdm(range(1000), desc="Dual for loop"):
+    for i in range(1000):
+        prev_mu1 = cur_mu1
         prev_mu2 = cur_mu2
         grad_mu1 = -1
         grad_mu2 = 3/2 * prev_mu2 - y
@@ -183,9 +181,88 @@ def dual_solver(H: np.ndarray, y: np.ndarray):
         cur_mu1 = sanity_mu1
         cur_mu2 = sanity_mu2
 
+        mu2_norms.append(np.sum(cur_mu2**2))
+        grad_mu2_norms.append(np.sum(grad_mu2**2))
+        mu1_values.append(cur_mu1)
+        fun_values.append(fun(cur_mu1, cur_mu2))
+
+        if i > 0 and \
+                np.abs(mu2_norms[i] - mu2_norms[i-1]) < 1e-10 and \
+                np.abs(fun_values[i] - fun_values[i-1]) < 1e-10 and \
+                np.abs(mu1_values[i] - mu1_values[i-1]) < 1e-10 and \
+                np.abs(grad_mu2_norms[i] - grad_mu2_norms[i-1]) < 1e-10:
+            print(f'Stopped loop at {i} iteration')
+            break
+        # plot norms
+        gamma_step_counter += 1
+
+    # plot_norms(range(1000), m2_norms, grad_m2_norms, m1_values, fun_values)
+
+    z = y - 1/2 * cur_mu2
+    x = np.linalg.solve(H.T @ H, H.T @ z)
+
+    if np.any(x < 0):
+        x = np.maximum(0, x)
+    if not np.isclose(np.sum(x), 1.):
+        x /= np.sum(x)
+
+    return x
+
+
+def dual_solver_with_barrier(H: np.ndarray, y: np.ndarray):
+    if H.shape[0] != y.shape[0]:
+        return "error"
+
+    cur_mu1 = np.ones(H.shape[1])
+    cur_mu2 = np.zeros(y.shape[0])
+    min_gamma_threshold = 1e-30
+    max_gamma_threshold = 1e-3
+    gamma = max_gamma_threshold
+    gamma_step_counter = 0
+    t = 100
+    epsilon = 1e-8
+    m2_norms = []
+    grad_m2_norms = []
+    m1_norms = []
+    fun_values = []
+
+    def fun(mu1, mu2):
+        return t * (3/4 * np.sum(mu2**2) - mu1 - mu2 @ y) - np.log(mu1 + H.T @ mu2 + epsilon)
+
+    def step_update_required(mu1, mu2):
+        res = mu1 + H.T @ mu2
+        return np.any(res < 0)
+
+    print(f'start of for loop {datetime.datetime.now()}')
+    for i in tqdm(range(1000), desc="Dual for loop"):
+        prev_mu2 = cur_mu2
+        prev_mu1 = cur_mu1
+        grad_mu1 = -1 * t - 1 / (prev_mu1 + H.T @ prev_mu2 + epsilon)
+        grad_mu2 = t * (3/2 * prev_mu2 - y) - H @ (1 / (prev_mu1 + H.T @ prev_mu2 + epsilon))
+
+        if gamma_step_counter == 30:
+            gamma = np.minimum(max_gamma_threshold, gamma * 1000)
+            gamma_step_counter = 0
+
+        #  check if we get out of the barrier:
+        sanity_mu1 = cur_mu1 + gamma * grad_mu1
+        sanity_mu2 = cur_mu2 + gamma * grad_mu2
+
+        while step_update_required(sanity_mu1, sanity_mu2) and gamma > min_gamma_threshold:
+            gamma *= 0.1
+            gamma_step_counter = 0
+            sanity_mu1 = cur_mu1 + gamma * grad_mu1
+            sanity_mu2 = cur_mu2 + gamma * grad_mu2
+
+        if step_update_required(sanity_mu1, sanity_mu2):
+            sanity_mu1 = np.maximum(np.max(- H.T @ sanity_mu2), sanity_mu1)
+
+        cur_mu1 = sanity_mu1
+        cur_mu2 = sanity_mu2
+
         m2_norms.append(np.sum(cur_mu2**2))
         grad_m2_norms.append(np.sum(grad_mu2**2))
-        m1_values.append(cur_mu1)
+        m1_norms.append(np.sum(cur_mu1**2))
         fun_values.append(fun(cur_mu1, cur_mu2))
         # plot norms
         gamma_step_counter += 1
@@ -224,7 +301,8 @@ class Example:
         self.y = y
 
 
-##### start of main script
+# start of main script
+
 file = open('./examples/examples.pkl', 'rb')
 examples = pickle.load(file)
 
@@ -233,11 +311,15 @@ for i, example in enumerate(examples, 0):
     H = example.H
     y = example.y
 
+    if H.shape[0] != y.shape[0]:
+        print("Error : matrix dimension doesn't correlate")
+        continue
+
     # skip big examples for debugging manners
     # if H.shape[0] > 1000:
     #     continue
 
-    # Mor debuging!!!!
+    # Mor debugging!!!!
     # if i is not 8:
     #     continue
 
@@ -246,6 +328,7 @@ for i, example in enumerate(examples, 0):
     print(y.shape)
     # gd_x = GD_solver(H, y)
     dual_x = dual_solver(H, y)
+    # dual_barrier_x = dual_solver_with_barrier(H, y)
     # nw_x = NW_solver_v2(H, y)
     # try:
     #     x_approx = solve(H, y)
@@ -260,21 +343,11 @@ for i, example in enumerate(examples, 0):
     print('Dual score:', np.linalg.norm(y - H @ dual_x))
     print('Dual validation:', np.isclose(np.sum(dual_x), 1.) and not np.any(dual_x < 0))
 
+    # print('Dual barrier score:', np.linalg.norm(y - H @ dual_barrier_x))
+    # print('Dual barrier validation:', np.isclose(np.sum(dual_barrier_x), 1.) and not np.any(dual_barrier_x < 0))
+
     # print('NW score:', np.linalg.norm(y - H @ nw_x))
     # print('NW validation:', np.isclose(np.sum(nw_x), 1.) and not np.any(nw_x < 0))
     print('\n\n')
 
 print(f'~~~~ End of run {datetime.datetime.now()} ~~~~')
-#  check if we get out of the barrier:
-# step_update_required = np.any(sanity_x < 0)
-# while step_update_required:
-#     gamma *= 0.1
-#     if gamma <= min_gamma:
-#         sanity_x = np.maximum(sanity_x, 0)
-#         break
-
-#     sanity_x = cur_x - gamma * grad
-#     step_update_required = np.any(sanity_x < 0)
-
-# cur_x =  sanity_x
-# cur_x /= np.sum(cur_x)
