@@ -2,7 +2,7 @@ import numpy as np
 import pickle
 
 
-def solver(H: np.ndarray, y: np.ndarray):
+def solver(H: np.ndarray, y: np.ndarray)-> np.ndarray:
     cur_mu1 = 1
     cur_mu2 = np.zeros(y.shape[0])
     min_gamma_threshold = 1e-30
