@@ -149,7 +149,7 @@ def dual_solver(H: np.ndarray, y: np.ndarray):
     fun_values = []
 
     def fun(mu1, mu2):
-        return 3/4 * np.sum(mu2**2) - mu1 - mu2 @ y
+        return -1/4 * np.sum(mu2**2) - mu1 - mu2 @ y
 
     def step_update_required(mu1, mu2):
         res = mu1 * np.ones(H.shape[1]) + H.T @ mu2
@@ -159,7 +159,7 @@ def dual_solver(H: np.ndarray, y: np.ndarray):
         prev_mu1 = cur_mu1
         prev_mu2 = cur_mu2
         grad_mu1 = -1
-        grad_mu2 = 3/2 * prev_mu2 - y
+        grad_mu2 = -1/2 * prev_mu2 - y
 
         if gamma_step_counter == 30:
             gamma = np.minimum(max_gamma_threshold, gamma * 1000)
